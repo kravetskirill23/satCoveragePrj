@@ -90,7 +90,7 @@ class Satellite(OrbitalElements):
         acceleration = rotRaan.dot(rotInc.dot(accelOrb))
         return acceleration
 
-    def propagateOrbit(self, t, dt, num):
+    def propagateJ2(self, t, dt, num):
         state0 = self.__orb2Cartesian__()
         
         twoBodyModel = lambda stateVec: np.concatenate((stateVec[3:], -earthGM * stateVec[:3] / np.linalg.norm(stateVec[:3])**3 + self.getAccelerationJ2(stateVec[0:6])),axis=None)
@@ -122,17 +122,16 @@ class WalkerGroup(Walker):
     def getInitialState(self, num):
         trueAnomaly = (num - (num // self.planeCount)* self.satsPerPlane) * self.phase
         raan = self.startRaan + (num // self.planeCount) * ((self.maxRaan - self.startRaan)/self.planeCount)
-        sat = Satellite(self.altitude, self.inclination, raan, trueAnomaly)
+        sat = Satellite(*[self.altitude, self.inclination, raan, trueAnomaly])
        
         return sat.getInitialState(num)
         
     
-    def propagate(self, t, dt, num):
-        trueAnomaly = (num - (num // planeCount)*satsPerPlane) * phase
-        raan = startRaan + (num // planeCount) * ((maxRaan - startRaan)/planeCount)
-        elements = OrbitalElements([self.altitude, self.inclination, raan, trueAnomaly])
-        sat = Satellite(elements)
-        return sat.propagateOrbit(t, dt)
+    def propagateJ2(self, t, dt, num):
+        trueAnomaly = (num - (num // self.planeCount)*self.satsPerPlane) * self.phase
+        raan = self.startRaan + (num // self.planeCount) * ((self.maxRaan - self.startRaan)/self.planeCount)
+        sat = Satellite(self.altitude, self.inclination, raan, trueAnomaly)
+        return sat.propagateJ2(t, dt, num)
     
     def getTotalSatCount(self):
         return satsPerPlane * planeCount
@@ -141,21 +140,24 @@ class Constellation:
     
     def __init__(self):
         self.groups = []
+        self.totalSatCount = 0
         
     def addWalkers(self, walkers):
+        
         walkersCount = 0
        
         for i in range(len(walkers)):
            
             walkerSatCount = walkers[i][2] * walkers[i][3]
-        
+            self.totalSatCount += walkerSatCount
+            
             for count in range(walkerSatCount):
                 self.groups.append(WalkerGroup(*walkers[i][1:]))
                         
                     
             
     def addBackupSatellites(self, satellites):
-        
+        self.totalSatCount += len(satellites)
         for i in range(len(satellites)):
             self.groups.append(Satellite(*satellites[i][1:]))  
 
@@ -167,5 +169,10 @@ class Constellation:
         for i in range(len(constellationState)):
             constellationState[i] = self.groups[i].getInitialState(i + 1)
         return constellationState            
+
+    def propagateJ2num(self, t, dt, num):
+        
+        return self.groups[num].propagateJ2(t, dt, num)
+    
 
 

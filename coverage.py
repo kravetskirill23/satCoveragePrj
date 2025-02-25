@@ -4,7 +4,7 @@ from walker import *
 from rk4 import *
 
 dt = float(1)
-tFinal = 10000.0
+tFinal = 10.0
 t = np.arange(0.0, tFinal, dt)
 
 
@@ -24,9 +24,6 @@ satellites.append(['sat_3', 700, 64, 25, 35])
 satellites.append(['sat_4', 650, 64, 60, 60])
 constellation.addBackupSatellites(satellites)
 
-# stateRVarr = propagateOrbit(a0, ecc0, trueAnomaly0, raan0, inc0, aop0, t, dt)
-
-stateRVarr = Satellite(*satellites[0][1:]).propagateOrbit(t, dt, 1)
 
 theta = np.linspace(0, 2 * np.pi, 100)
 phi = np.linspace(0, np.pi, 50)
@@ -50,11 +47,22 @@ ax.set_zlabel('Z')
 ax.set_title('3D Sphere')
 ax.set_box_aspect((1, 1, 1))
 
-x = stateRVarr[:, 0]
-y = stateRVarr[:, 1]
-z = stateRVarr[:, 2]
+# stateRVarr = propagateOrbit(a0, ecc0, trueAnomaly0, raan0, inc0, aop0, t, dt)
+totalSatCount = constellation.totalSatCount
+print('\n', totalSatCount, ' - total number of satellites ')
+# stateRVarr = Satellite(*satellites[0][1:]).propagateJ2(t, dt, 1)
 
-plt.plot(x, y, z, label='parametric curve')
+for i in range(totalSatCount):
+    
+    rState = constellation.propagateJ2num(t, dt, i)
+    xi = rState[:, 0]
+    yi = rState[:, 1]
+    zi = rState[:, 2]
+    
+    plt.plot(xi, yi, zi, label='parametric curve {}'.format(i))
+    
+    if i % 100 == 0:
+        print('satellite № {} has integrated'.format(i))
 
 # plt.savefig('3dOrbitGraph.png')
 plt.show()
