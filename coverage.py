@@ -2,18 +2,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from walker import *
 from rk4 import *
-from propagator import * 
-
-inc0 = np.deg2rad(23)
-raan0 = np.deg2rad(45)
-aop0 = np.deg2rad(283)
-a0 = 7000000 # m
-ecc0 = 0.0
-trueAnomaly0 = np.deg2rad(15)
 
 dt = float(1)
 tFinal = 10000.0
 t = np.arange(0.0, tFinal, dt)
+
+
 walkers = []
 walkers.append(['walker_1', 53, 50, 32, 1, 500, 360, 0])
 walkers.append(['walker_2', 85, 50, 8,  1, 720, 360, 30])
@@ -30,9 +24,9 @@ satellites.append(['sat_3', 700, 64, 25, 35])
 satellites.append(['sat_4', 650, 64, 60, 60])
 constellation.addBackupSatellites(satellites)
 
-stateRVarr = propagateOrbit(a0, ecc0, trueAnomaly0, raan0, inc0, aop0, t, dt)
+# stateRVarr = propagateOrbit(a0, ecc0, trueAnomaly0, raan0, inc0, aop0, t, dt)
 
-
+stateRVarr = Satellite(*satellites[0][1:]).propagateOrbit(t, dt, 1)
 
 theta = np.linspace(0, 2 * np.pi, 100)
 phi = np.linspace(0, np.pi, 50)

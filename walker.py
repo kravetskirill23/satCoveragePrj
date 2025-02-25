@@ -1,5 +1,6 @@
 import numpy as np
 from typing import NamedTuple
+from rk4 import *
 
 earthRadius = 6378135      # Экваториальный радиус Земли [m]
 earthGM = 3.986004415e+14  # Гравитационный параметр Земли [m3/s2]
@@ -24,19 +25,17 @@ class Satellite(OrbitalElements):
         
     def __orb2Cartesian__(self):
         a = earthRadius + self.altitude *1e3
-        ecc = 0
-        aop = 0
+     
         trueAnomaly = np.deg2rad(self.trueAnomaly)
         mu = earthGM
         raan = np.deg2rad(self.raan)
         inc = np.deg2rad(self.inclination)
-        p = a * (1 - ecc ** 2)
-        r = p / (1 + ecc * np.cos(trueAnomaly))
-        trueAnomalyDot = np.sqrt(p * mu) / r**2
-        rDot = - p * ecc * trueAnomalyDot * np.sin(trueAnomaly) / (1 + ecc * np.cos(trueAnomaly)) ** 2
+        
+        r = a
+        trueAnomalyDot = np.sqrt(mu / r**3)
         rVecOSC = np.array([r * np.cos(trueAnomaly), r * np.sin(trueAnomaly), 0])
-        vxOSC = rDot * np.cos(trueAnomaly) - r * trueAnomalyDot * np.sin(trueAnomaly)
-        vyOSC = rDot * np.sin(trueAnomaly) + r * trueAnomalyDot * np.cos(trueAnomaly)
+        vxOSC =  - r * trueAnomalyDot * np.sin(trueAnomaly)
+        vyOSC =  r * trueAnomalyDot * np.cos(trueAnomaly)
         velVecOSC = np.array([vxOSC, vyOSC, 0])
 
         rotRaan = np.array([[np.cos(raan), -np.sin(raan), 0],
@@ -50,9 +49,12 @@ class Satellite(OrbitalElements):
         velVecISC = rotRaan.dot(rotInc.dot(velVecOSC))
         return np.concatenate((rVecISC, velVecISC), axis=None)
 
-    def getAccelerationJ2(rVec):
+    def getAccelerationJ2(self, rvVec):
+        rVec = rvVec[0:3]
         r = np.linalg.norm(rVec)
-
+        vVec = rvVec[3:]
+        v = np.linalg.norm(vVec)
+        
         cVec = np.cross(rVec, vVec) # moment of the pulse vector
         c = np.linalg.norm(cVec)
 
@@ -64,13 +66,15 @@ class Satellite(OrbitalElements):
         raan = np.arctan2(lVec[1], lVec[0]) # longitude of the ascending node
 
         vecRaan = np.array([np.cos(raan), np.sin(raan), 0.0])
-        u = np.acos(np.dot(vecRaan, rVec)/r)
+        u = np.acos(np.dot(vecRaan, rVec)/r) if rVec[-1] > 0 else 2 * np.pi - np.acos(np.dot(vecRaan, rVec)/r)
+        
+        # print(r)
         
         epsilon = 3 / 2 * earthGM * earthRadius**2 * earthJ2
         
         accelOrb = epsilon / r**4 * np.array(
             [
-                3 * np.sin(u)**2 * np.sin(inc)**2 - 1, \
+                3 * (np.sin(u) * np.sin(inc))**2 - 1, \
                 -np.sin(2 * u) * np.sin(inc)**2, \
                 -np.sin(2 * inc) * np.sin(u)
             ])
@@ -86,29 +90,11 @@ class Satellite(OrbitalElements):
         acceleration = rotRaan.dot(rotInc.dot(accelOrb))
         return acceleration
 
-
-
-    # Решаем уравнение с помощью метода Рунге-Кутты четвертого порядка
-    def __RK4Model__(y0, t, dt, vecFunction):
-        # y - список размерности size(y0) x size(t),
-        # vecFunction - векторное Лямбда-выражение модели движения
-        # где y0 - вектор начальных данных, например, size[r, v, q, omega] = 12
-        y = np.array([y0 for i in range(len(t))], dtype=float)
-        y[0] = y0 # начальное условие
-        for i in range(1, len(t)):
-            k1 = vecFunction(y[i-1])
-            k2 = vecFunction(y[i-1] + dt/2 * k1)
-            k3 = vecFunction(y[i-1] + dt/2 * k2)
-            k4 = vecFunction(y[i-1] + dt * k3)
-
-            y[i] = y[i-1] + dt/6 * (k1 + 2*k2 + 2*k3 + k4)
-        return y # решение модели - ссписок из фазовых векторов в каждый момент времени t
-
     def propagateOrbit(self, t, dt, num):
-        state0 = self.__orb2Cartesian__(self.altitude, self.ecc, self.trueAnomaly, self.raan, self.inclination, self.aop)
+        state0 = self.__orb2Cartesian__()
         
-        twoBodyModel = lambda stateVec: np.concatenate((stateVec[3:], self.getAccelerationJ2(stateVec[0:3])),axis=None)
-        stateRVarr = self.__RK4Model__(state0, t, dt, twoBodyModel)
+        twoBodyModel = lambda stateVec: np.concatenate((stateVec[3:], -earthGM * stateVec[:3] / np.linalg.norm(stateVec[:3])**3 + self.getAccelerationJ2(stateVec[0:6])),axis=None)
+        stateRVarr = RK4Model(state0, t, dt, twoBodyModel)
             
         return stateRVarr
     
